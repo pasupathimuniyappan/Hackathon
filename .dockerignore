@@ -1,0 +1,15 @@
+.git
+.gitignore
+README.md
+.env
+.env.*
+logs/
+tests/
+docs/
+*.md
+Dockerfile*
+docker-compose.*
+.nyc_output
+coverage/
+.pytest_cache
+htmlcov/
