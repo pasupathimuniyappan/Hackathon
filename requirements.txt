@@ -6,6 +6,9 @@ python-multipart==0.0.9
 # MCP
 #fastmcp
 
+# AI Core
+ai-server-sdk
+
 # Data Validation
 pydantic
 pydantic-settings

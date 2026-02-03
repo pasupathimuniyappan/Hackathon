@@ -5,27 +5,29 @@ from openai import AsyncOpenAI
 from ..models import PromptIssue, IssueType, Severity, Impact
 from ..config.settings import settings
 from ..config.logger import logger
+from ..utils.model_client import get_client
 
 
 class LLMOptimizer:
     """LLM-powered prompt optimizer using OpenAI GPT models."""
-    
+
     def __init__(self):
         """Initialize OpenAI client."""
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
+        # self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = get_client()
+        self.model = settings.model_engine_id
         self.max_tokens = settings.openai_max_tokens
         self.temperature = settings.openai_temperature
-        
+
         logger.info(f"✅ LLM Optimizer initialized with model: {self.model}")
-    
+
     async def analyze_with_llm(self, text: str) -> List[PromptIssue]:
         """
         Use GPT to analyze prompt quality and identify issues.
-        
+
         Args:
             text: Prompt text to analyze
-            
+
         Returns:
             List of PromptIssue objects
         """
@@ -63,53 +65,56 @@ Be specific and actionable in your suggestions."""
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Analyze this prompt:\n\n{text}"}
+                    {"role": "user", "content": f"Analyze this prompt:\n\n{text}"},
                 ],
-                response_format={"type": "json_object"},
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
-            
+
             content = response.choices[0].message.content
             logger.debug(f"LLM response: {content}")
-            
+
             result = json.loads(content)
             issues_data = result.get("issues", [])
-            
+
             # Convert to PromptIssue objects
             issues = []
             for issue_data in issues_data:
                 try:
-                    issues.append(PromptIssue(
-                        id=f"llm-{uuid.uuid4().hex[:8]}",
-                        start=issue_data.get("start", 0),
-                        end=issue_data.get("end", len(text)),
-                        type=IssueType(issue_data["type"]),
-                        severity=Severity(issue_data["severity"]),
-                        message=issue_data["message"],
-                        suggestion=issue_data["suggestion"],
-                        impact=Impact(issue_data.get("impact", "medium"))
-                    ))
+                    issues.append(
+                        PromptIssue(
+                            id=f"llm-{uuid.uuid4().hex[:8]}",
+                            start=issue_data.get("start", 0),
+                            end=issue_data.get("end", len(text)),
+                            type=IssueType(issue_data["type"]),
+                            severity=Severity(issue_data["severity"]),
+                            message=issue_data["message"],
+                            suggestion=issue_data["suggestion"],
+                            impact=Impact(issue_data.get("impact", "medium")),
+                        )
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to parse issue: {e}")
                     continue
-            
+
             logger.info(f"✅ LLM found {len(issues)} issues")
             return issues
-            
+
         except Exception as e:
             logger.error(f"❌ LLM analysis failed: {e}")
             return []
-    
-    async def optimize_prompt(self, text: str, focus: str = "all", level: str = "balanced") -> Dict[str, Any]:
+
+    async def optimize_prompt(
+        self, text: str, focus: str = "all", level: str = "balanced"
+    ) -> Dict[str, Any]:
         """
         Generate an optimized version of the prompt.
-        
+
         Args:
             text: Original prompt text
             focus: Focus area (clarity, efficiency, specificity, all)
             level: Optimization level (basic, balanced, advanced)
-            
+
         Returns:
             Dictionary with optimization results
         """
@@ -117,15 +122,15 @@ Be specific and actionable in your suggestions."""
             "clarity": "Focus on making the prompt clearer and more understandable.",
             "efficiency": "Focus on reducing token usage while maintaining effectiveness.",
             "specificity": "Focus on adding specific details and constraints.",
-            "all": "Apply comprehensive improvements across all areas."
+            "all": "Apply comprehensive improvements across all areas.",
         }
-        
+
         level_instructions = {
             "basic": "Make minimal, essential improvements only.",
             "balanced": "Balance between improvements and maintaining original intent.",
-            "advanced": "Apply comprehensive optimizations and restructuring."
+            "advanced": "Apply comprehensive optimizations and restructuring.",
         }
-        
+
         system_prompt = f"""You are an expert prompt engineer. Your task is to optimize prompts for better AI responses.
 
 {focus_instructions.get(focus, focus_instructions["all"])}
@@ -158,22 +163,18 @@ Maintain the original intent while maximizing clarity and effectiveness."""
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Original prompt:\n\n{text}"}
+                    {"role": "user", "content": f"Original prompt:\n\n{text}"},
                 ],
-                response_format={"type": "json_object"},
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
-            
+
             content = response.choices[0].message.content
             result = json.loads(content)
-            
+
             logger.info("✅ Prompt optimized successfully")
             return result
-            
+
         except Exception as e:
             logger.error(f"❌ Optimization failed: {e}")
-            return {
-                "optimized_prompt": text,
-                "improvements": []
-            }
+            return {"optimized_prompt": text, "improvements": []}
